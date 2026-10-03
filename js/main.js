@@ -1,11 +1,5 @@
-/*
-** file: js/main.js
-** description: javascript code for "html/main.html" page
-*/
+"use strict";
 
-function init_main () {
-    $('html').hide().fadeIn('slow');
-}
-
-//bind events to dom elements
-document.addEventListener('DOMContentLoaded', init_main);
+document.addEventListener("DOMContentLoaded", () => {
+    document.documentElement.animate([{ opacity: 0 }, { opacity: 1 }], 600);
+});

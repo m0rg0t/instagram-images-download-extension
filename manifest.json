@@ -1,35 +1,33 @@
 {
-    "name": "Instagram Images Download Extension",
-    "version": "1.0.1",
-    "manifest_version": 2,
-
-    "description": "This extension helps you to download all the images from an Instagram's user profile page in a click.",
-    "icons": {
-        "19": "images/icon_19.png",
-        "38": "images/icon_38.png",
-        "128": "images/icon_128.png"
-    },
-
-    "browser_action": {
-        "default_title": "Instagram Images Download Extension",
-        "default_icon": {
-            "19": "images/icon_19.png",
-            "38": "images/icon_38.png"
-        },
-        "default_popup": "html/main.html"
-    },
-
-    "permissions": [
-        "storage",
-        "downloads"
-    ],
-
-    "content_scripts": [{
-        "js": ["js/jquery-1.9.1.js", "js/instagram.js"],
-        "matches": ["https://www.instagram.com/*"]
-    }],
-
-    "background": {
-        "scripts": ["js/background.js"]
+  "name": "Instagram Images Download Extension",
+  "version": "1.0.1",
+  "manifest_version": 3,
+  "description": "This extension helps you to download all the images from an Instagram's user profile page in a click.",
+  "icons": {
+    "19": "images/icon_19.png",
+    "38": "images/icon_38.png",
+    "128": "images/icon_128.png"
+  },
+  "permissions": [
+    "storage",
+    "downloads"
+  ],
+  "content_scripts": [
+    {
+      "js": [
+        "js/instagram.js"
+      ],
+      "matches": [
+        "https://www.instagram.com/*"
+      ]
     }
+  ],
+  "action": {
+    "default_title": "Instagram Images Download Extension",
+    "default_icon": {
+      "19": "images/icon_19.png",
+      "38": "images/icon_38.png"
+    },
+    "default_popup": "html/main.html"
+  }
 }

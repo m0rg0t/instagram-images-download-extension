@@ -1,112 +1,93 @@
-var collectedInstagramImages = [];
+(() => {
+    "use strict";
 
+    // The content-script match remains limited to https://www.instagram.com/*.
+    // Ignore the home page and avoid adding duplicate controls.
+    if (window.location.pathname === "/" ||
+        document.querySelector(".instagram-extension-box")) return;
 
-$(document).ready(function() {
+    let collectedInstagramImages = [];
+    const markedImages = new WeakSet();
+    const style = document.createElement("style");
+    style.textContent = `
+        .instagram-extension-box { position: fixed; bottom: 10px; right: 10px; width: 260px; background-color: white; border-radius: 3px; color: #5a5a5a; padding: 15px; text-align: center; border: 1px solid #e0e0e0; }
+        .instagram-extension-box-button { display: inline-block; background-color: #adadad; color: white; border-radius: 5px; padding: 10px; margin: 3px 0; }
+        .instagram-extension-box-button.faded { background-color: #dedddd; }
+        .instagram-extension-box-button:hover { background-color: #e2ba7b; cursor: pointer; }
+        #instagram-extension-box-title { display: block; margin: 3px 0; font-weight: bold; }
+        #instagram-extension-box-description { display: block; margin: 6px 0; font-size: 11px; line-height: 1.4; }
+    `;
+    document.head.append(style);
+    const box = document.createElement("div");
+    box.className = "instagram-extension-box";
+    // Static extension-owned text; image URLs and page text never become HTML.
+    box.innerHTML = `
+        <span id="instagram-extension-box-title">Instagram download extension</span>
+        <span id="instagram-extension-box-description">Scroll down the profile to make all photos visible, then collect the photos and simply download them in one click.</span>
+        <span id="instagram-extension-box-button-collect" class="instagram-extension-box-button" role="button" tabindex="0">Collect</span>
+        <span id="instagram-extension-box-button-download" class="instagram-extension-box-button faded" role="button" tabindex="0">Download photos</span>
+    `;
+    document.body.append(box);
+    const collectButton = box.querySelector("#instagram-extension-box-button-collect");
+    const downloadButton = box.querySelector("#instagram-extension-box-button-download");
 
-	// Only apply it when URL is not Instagram's home:
-	var url = document.location.href;
-	var urlParts = url.split("/");
+    function markCollected(img) {
+        img.style.opacity = "0.2";
+        if (markedImages.has(img)) return;
+        markedImages.add(img);
+        const rect = img.getBoundingClientRect();
+        const marker = document.createElement("div");
+        marker.className = "instagram-extension-marker";
+        marker.textContent = "Collected";
+        Object.assign(marker.style, {
+            position: "absolute",
+            top: `${rect.top + window.scrollY + 4}px`,
+            left: `${rect.left + window.scrollX + 4}px`,
+            backgroundColor: "#444", borderRadius: "25px", padding: "6px",
+            fontSize: "12px", color: "white", pointerEvents: "none"
+        });
+        document.body.append(marker);
+        const animation = marker.animate([{ opacity: 1 }, { opacity: 0 }], 4000);
+        animation.onfinish = () => {
+            marker.remove();
+            markedImages.delete(img);
+        };
+    }
 
-	if (urlParts[3] != "") {
+    collectButton.addEventListener("click", () => {
+        // A fresh snapshot on every click: removed/replaced images don't accumulate.
+        const uniqueUrls = new Set();
+        document.querySelectorAll("body img").forEach(img => {
+            if (!img.getAttribute("src")) return;
+            const url = new URL(img.src, document.baseURI);
+            // An image URL must not become an executable/script download link.
+            if (!["http:", "https:"].includes(url.protocol)) return;
+            uniqueUrls.add(url.href);
+            markCollected(img);
+        });
+        collectedInstagramImages = [...uniqueUrls];
+        downloadButton.textContent = `Download ${collectedInstagramImages.length} photos`;
+        downloadButton.classList.toggle("faded", collectedInstagramImages.length === 0);
+    });
 
-		// Create menu on screen
-		var box_title_text = 'Instagram download extension';
-		var box_description_text = 'Scroll down the profile to make all photos visible, then collect the photos and simply download them in one click.';
-		var html = '';
+    downloadButton.addEventListener("click", () => {
+        const name = document.querySelector("body h1")?.textContent || "instagram";
+        for (const link of collectedInstagramImages) {
+            const anchor = document.createElement("a");
+            anchor.href = link;
+            anchor.download = `${name}.jpg`;
+            document.body.append(anchor);
+            anchor.click();
+            anchor.remove();
+        }
+    });
 
-		// HTML for menu
-		html += '<style>';
-		html +=     '.instagram-extension-box {   position: fixed; bottom: 10px; right: 10px; width: 260px; background-color: white; border-radius: 3px; color: #5a5a5a; padding: 15px; text-align: center; border: 1px solid #e0e0e0; }';
-		html +=     '.instagram-extension-box-button {   display: inline-block; background-color: #adadad; color: white; border-radius: 5px; padding: 10px; margin: 3px 0;}';
-		html +=     '.instagram-extension-box-button.faded { background-color: #dedddd; }';
-		html +=     '.instagram-extension-box-button:hover { background-color: #e2ba7b; cursor: pointer }';
-		html +=     '#instagram-extension-box-title {   display: block; margin: 3px 0; font-weight:bold; }';
-		html +=     '#instagram-extension-box-description {   display: block; margin: 6px 0; font-size: 11px; line-height: 1.4; }';
-		html += '</style>';
-
-		html += '<div class="instagram-extension-box">';
-		html +=     '<span id="instagram-extension-box-title">' + box_title_text + '</span>';
-		html +=     '<span id="instagram-extension-box-description">' + box_description_text + '</span>';
-		html +=     '<span id="instagram-extension-box-button-collect" class="instagram-extension-box-button">Collect</span>';
-		html +=     '<span id="instagram-extension-box-button-download" class="instagram-extension-box-button faded">Download photos</span>';
-		html += '</div>';
-
-		$('body').append(html);
-	}
-
-
-	///////////////////////////
-	//
-	//      COLLECT
-	//
-	///////////////////////////
-
-
-	$('#instagram-extension-box-button-collect').on("click", function() {
-
-		// Retrieve all IMG tags in HTML.
-		$('body').find('img').each(function(index, value) {
-
-			// Get image sources.
-			imgSrc = value.src;
-
-			// Collect all images in array.
-			collectedInstagramImages.push(imgSrc);
-
-			// Remove repeated image sources.
-			collectedInstagramImages = jQuery.unique(collectedInstagramImages);
-
-			// Get ID of images to edit them (display them as collected).
-			imgId = $(this).attr('id');
-			$('#'+imgId).css('opacity', 0.2);
-
-			// Append a marker over the images that had been already collected.
-			if (imgId != undefined) {
-
-				imgPosition = $('#'+imgId).offset();
-
-				if (imgPosition != undefined) {
-					newMarkerId = 'instagram-extension-marker-'+ imgId;
-
-					if ($("#" + newMarkerId).length == 0) {
-						$('body').append('<div id="'+ newMarkerId +'" style="position: absolute; top: '+(imgPosition.top+4)+'px; left: '+(imgPosition.left+4)+'px; background-color: #444; border-radius: 25px; padding: 6px; font-size: 12px; color: white;">Collected</div>');
-						$('#'+newMarkerId).fadeOut(4000, function() {
-							$(this).remove();
-						});
-					}
-				}
-			}
-		});
-
-		// Update the downloader button with collected images counter
-		$('#instagram-extension-box-button-download').text('Download ' + collectedInstagramImages.length + ' photos').removeClass('faded');
-	});
-
-
-
-	///////////////////////////
-	//
-	//      DOWNLOAD
-	//
-	///////////////////////////
-
-
-	$('#instagram-extension-box-button-download').on("click", function() {
-
-		// Convert image urls to links and auto-click to start download.
-		var name = $('body').find('h1').html();
-
-		for (i in collectedInstagramImages) {
-			var link = collectedInstagramImages[i];
-
-			var a = $("<a>")
-			    .attr("href", link)
-			    .attr("download", name + ".jpg")
-			    .appendTo("body");
-
-			a[0].click();
-
-			a.remove();
-		}
-	});
-});
+    for (const button of [collectButton, downloadButton]) {
+        button.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                button.click();
+            }
+        });
+    }
+})();
