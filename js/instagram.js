@@ -59,7 +59,12 @@
         const uniqueUrls = new Set();
         document.querySelectorAll("body img").forEach(img => {
             if (!img.getAttribute("src")) return;
-            const url = new URL(img.src, document.baseURI);
+            let url;
+            try {
+                url = new URL(img.src, document.baseURI);
+            } catch {
+                return;
+            }
             // An image URL must not become an executable/script download link.
             if (!["http:", "https:"].includes(url.protocol)) return;
             uniqueUrls.add(url.href);
